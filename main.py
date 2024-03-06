@@ -235,11 +235,7 @@ async def load_model(request: Request, data: ModelLoadRequest):
         try:
             for module, modules in load_status:
                 if await request.is_disconnected():
-                    logger.error(
-                        "Model load cancelled by user. "
-                        "Please make sure to run unload to free up resources."
-                    )
-                    break
+                    raise CancelledError("Client disconnected during model loading.")
 
                 if module == 0:
                     loading_bar: IncrementalBar = IncrementalBar("Modules", max=modules)
@@ -270,12 +266,11 @@ async def load_model(request: Request, data: ModelLoadRequest):
                     )
 
                     yield get_sse_packet(response.model_dump_json())
-        except CancelledError:
-            logger.error(
-                "Model load cancelled by user. "
-                "Please make sure to run unload to free up resources."
-            )
+        except CancelledError as exc:
+            logger.error(f"Model load cancelled: {exc}")
+            yield get_generator_error(str(exc))
         except Exception as exc:
+            logger.exception("An error occurred during model loading:")
             yield get_generator_error(str(exc))
 
     # Determine whether to use or skip the queue
